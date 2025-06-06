@@ -13,18 +13,25 @@ import (
 
 	"github.com/bishal05das/students-api/internal/config"
 	"github.com/bishal05das/students-api/internal/http/handlers/student"
+	"github.com/bishal05das/students-api/internal/storage/sqlite"
 )
 
 func main() {
 	//load config
 	cfg := config.MustLoad()
 	// database setup
+	storage, err := sqlite.New(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	slog.Info("storage estabblished",slog.String("env",cfg.Env),slog.String("version","1.0.0"))
+
 
 	//router setup
 	router := http.NewServeMux()
 
-	router.HandleFunc("POST /api/students", student.New())
-
+	router.HandleFunc("POST /api/students", student.New(storage))
+    router.HandleFunc("GET /api/students/{id}", student.GetById(storage))
 	//setup server
 
 	server := http.Server{
@@ -32,11 +39,11 @@ func main() {
 		Handler: router,
 	}
 	fmt.Println("server started")
-	slog.Info("server started",slog.String("address",cfg.Addr))
+	slog.Info("server started", slog.String("address", cfg.Addr))
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
-    //graceful shutdown
+	//graceful shutdown
 	go func() {
 		err := server.ListenAndServe()
 		if err != nil {
@@ -49,8 +56,8 @@ func main() {
 
 	defer cancel()
 
-	if err:= server.Shutdown(ctx); err != nil {
-		slog.Error("failed to shutdown server", slog.String("error",err.Error()))
+	if err := server.Shutdown(ctx); err != nil {
+		slog.Error("failed to shutdown server", slog.String("error", err.Error()))
 	}
 
 	slog.Info(("server shutdown gracefully"))
